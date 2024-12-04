@@ -1,0 +1,67 @@
+--Graph 1
+from(bucket: "bigdata")
+  |> range(start: -3d, stop: -2d) // Get data from the last 3 days to 2 days ago
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "volume") // Fetch volume field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the correct Grafana variable syntax
+  |> last() // Get the last data point for the selected company
+
+--Graph 2
+from(bucket: "bigdata")
+  |> range(start: -90d) // Get data from the last 90 days
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "low") // Fetch low price field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the correct Grafana variable syntax
+  |> filter(fn: (r) => r._value != 0) // Exclude zero values
+  |> min() // Find the minimum (lowest) price in the given range
+
+--Graph 3
+from(bucket: "bigdata")
+  |> range(start: -90d) // Get data from the last 90 days
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "high") // Fetch high price field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the correct Grafana variable syntax
+  |> filter(fn: (r) => r._value != 0) // Exclude zero values
+  |> max() // Find the maximum (highest) price in the given range
+
+--Graph 4
+from(bucket: "bigdata")
+  |> range(start: -90d) // Get data from the last 90 days
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "close") // Fetch the closing price field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the correct Grafana variable for the stock symbol
+  |> filter(fn: (r) => r._value != 0) // Exclude rows with 0 value for the closing price
+  |> mean() // Calculate the average price over the 90-day range
+  |> yield(name: "90_day_average") // Output the result
+
+--Graph 5
+from(bucket: "bigdata")
+  |> range(start: today(), stop: now()) // Get data from the start of today to the current time
+  |> filter(fn: (r) => r._measurement == "stock_prices_predicted") // Use the predicted stock prices measurement
+  |> filter(fn: (r) => r._field == "close") // Focus on the closing price field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the Grafana variable for stock symbol (replace with actual symbol if needed)
+  |> keep(columns: ["_time", "_value", "symbol"]) // Keep the time, value (closing price), and symbol columns
+  |> rename(columns: {_time: "Date", _value: "Predicted_Price"}) // Rename columns for clarity
+
+--Graph 6
+from(bucket: "bigdata")
+  |> range(start: -90d) // Get data from the last 90 days
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "close") // Focus on the closing price field
+  |> filter(fn: (r) => r.symbol == "${Company}") // Use the Grafana variable correctly for the stock symbol
+  |> filter(fn: (r) => r._value != 0) // Exclude rows with 0 value for closing price
+  |> aggregateWindow(every: 1d, fn: mean, createEmpty: false) // Calculate the daily average for the closing price
+  |> yield(name: "close") // Output the result
+
+--Graph 7
+from(bucket: "bigdata")
+  |> range(start: -1y)  // Use a large range to include all possible records
+  |> filter(fn: (r) => r._measurement == "stock_prices")
+  |> filter(fn: (r) => r._field == "open" or r._field == "high" or r._field == "low" or r._field == "close")
+  |> filter(fn: (r) => r.symbol == "${Company}")  // Replace with your stock symbol variable
+  |> filter(fn: (r) => r._value != 0)  // Exclude rows where any field value is 0
+  |> sort(columns: ["_time"], desc: true)  // Sort by time in descending order
+  |> limit(n: 20)  // Fetch only the 20 most recent records
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time", "symbol", "open", "high", "low", "close"])  // Keep only relevant columns
+
